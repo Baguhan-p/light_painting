@@ -1,4 +1,4 @@
-import type { MediaItem } from "../types";
+import type { Collection, MediaItem } from "../types";
 import { defaultFilters } from "../types";
 import { uid } from "../lib/utils";
 
@@ -14,6 +14,7 @@ interface SeedDef {
   width?: number;
   height?: number;
   duration?: number;
+  collectionIds?: string[];
 }
 
 const SEEDS: SeedDef[] = [
@@ -28,6 +29,7 @@ const SEEDS: SeedDef[] = [
     favorite: true,
     width: 1152,
     height: 720,
+    collectionIds: ["col-nature"],
   },
   {
     src: "https://image.qwenlm.ai/generated-images/164cab3f-f039-4479-9829-081ec7167c99/_result.png",
@@ -49,6 +51,7 @@ const SEEDS: SeedDef[] = [
     tags: ["природа", "макро"],
     rating: 4,
     duration: 25,
+    collectionIds: ["col-nature"],
   },
   {
     src: "https://image.qwenlm.ai/generated-images/ca8ec2a4-e639-49e9-9b20-6fa53965d9e9/_result.png",
@@ -60,6 +63,7 @@ const SEEDS: SeedDef[] = [
     rating: 4,
     width: 1000,
     height: 750,
+    collectionIds: ["col-city"],
   },
   {
     src: "https://image.qwenlm.ai/generated-images/c2f51609-4eea-4021-ac95-46c494ac99d3/_result.png",
@@ -72,6 +76,7 @@ const SEEDS: SeedDef[] = [
     favorite: true,
     width: 1100,
     height: 733,
+    collectionIds: ["col-city"],
   },
   {
     src: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4",
@@ -82,6 +87,7 @@ const SEEDS: SeedDef[] = [
     tags: ["город", "таймлапс"],
     rating: 3,
     duration: 20,
+    collectionIds: ["col-city"],
   },
   {
     src: "https://image.qwenlm.ai/generated-images/27c3f4dc-1548-453f-8da9-8f210ef502db/_result.png",
@@ -93,6 +99,7 @@ const SEEDS: SeedDef[] = [
     rating: 3,
     width: 1200,
     height: 700,
+    collectionIds: ["col-nature"],
   },
   {
     src: "https://image.qwenlm.ai/generated-images/49e8bdb8-b367-40cf-88d2-eccac81ca182/_result.png",
@@ -104,10 +111,21 @@ const SEEDS: SeedDef[] = [
     rating: 4,
     width: 1200,
     height: 750,
+    collectionIds: ["col-nature"],
   },
 ];
 
-export async function buildSeedItems(): Promise<MediaItem[]> {
+const SEED_COLLECTIONS: Collection[] = [
+  { id: "col-nature", name: "Природа и дорога", createdAt: Date.now() },
+  { id: "col-city", name: "Городские истории", createdAt: Date.now() },
+];
+
+export interface SeedPayload {
+  items: MediaItem[];
+  collections: Collection[];
+}
+
+export async function buildSeeds(): Promise<SeedPayload> {
   const out: MediaItem[] = [];
   const now = Date.now();
   for (let i = 0; i < SEEDS.length; i++) {
@@ -137,7 +155,8 @@ export async function buildSeedItems(): Promise<MediaItem[]> {
       remoteUrl: s.src.startsWith("http") ? s.src : undefined,
       rotation: 0,
       filters: { ...defaultFilters },
+      collectionIds: s.collectionIds ?? [],
     });
   }
-  return out;
+  return { items: out, collections: SEED_COLLECTIONS };
 }

@@ -1,6 +1,18 @@
-import type { MediaType } from "../types";
+import { useEffect, useRef, useState } from "react";
+import type { Collection, MediaType } from "../types";
 import { formatBytes } from "../lib/utils";
-import { IconAperture, IconFilm, IconHeart, IconImage, IconStar, IconX } from "./Icons";
+import {
+  IconAperture,
+  IconCheck,
+  IconFilm,
+  IconFolder,
+  IconHeart,
+  IconImage,
+  IconPlus,
+  IconStar,
+  IconTrash,
+  IconX,
+} from "./Icons";
 
 export type TypeFilter = "all" | MediaType | "fav";
 export type SortKey = "new" | "old" | "top" | "name";
@@ -9,6 +21,12 @@ export interface FiltersState {
   counts: Record<TypeFilter, number>;
   typeFilter: TypeFilter;
   onType: (t: TypeFilter) => void;
+  collections: Collection[];
+  collectionCounts: Map<string, number>;
+  activeCollectionId: string | null;
+  onCollection: (id: string | null) => void;
+  onCreateCollection: (name: string) => void;
+  onDeleteCollection: (id: string) => void;
   tags: [string, number][];
   activeTags: string[];
   onToggleTag: (t: string) => void;
@@ -46,6 +64,34 @@ function Heading({ children }: { children: React.ReactNode }) {
 
 /** Содержимое фильтров — используется и в сайдбаре, и в мобильной панели. */
 export function FiltersContent(p: FiltersState) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const confirmTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
+
+  const submitCreate = () => {
+    if (!name.trim()) {
+      setCreating(false);
+      return;
+    }
+    p.onCreateCollection(name);
+    setName("");
+    setCreating(false);
+  };
+
+  const askDelete = (id: string) => {
+    if (confirmId === id) {
+      setConfirmId(null);
+      p.onDeleteCollection(id);
+      return;
+    }
+    setConfirmId(id);
+    window.clearTimeout(confirmTimer.current);
+    confirmTimer.current = window.setTimeout(() => setConfirmId(null), 2600);
+  };
+
   return (
     <div className="space-y-6">
       <section>
@@ -78,6 +124,98 @@ export function FiltersContent(p: FiltersState) {
         </nav>
       </section>
 
+      <section>
+        <Heading>Коллекции</Heading>
+        {p.collections.length > 0 && (
+          <nav className="space-y-1">
+            {p.collections.map((c) => {
+              const active = p.activeCollectionId === c.id;
+              const confirming = confirmId === c.id;
+              return (
+                <div
+                  key={c.id}
+                  className={`group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-all ${
+                    active
+                      ? "bg-amber/12 text-amber shadow-[inset_2px_0_0_0_var(--color-amber)]"
+                      : "text-sand hover:bg-surface hover:text-cream"
+                  }`}
+                >
+                  <button
+                    onClick={() => p.onCollection(active ? null : c.id)}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    title={c.name}
+                  >
+                    <IconFolder size={15} className={active ? "text-amber" : "text-mute"} />
+                    <span className="flex-1 truncate">{c.name}</span>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[11px] tabular-nums ${
+                        active ? "bg-amber/15 text-amber" : "bg-surface text-mute"
+                      }`}
+                    >
+                      {p.collectionCounts.get(c.id) ?? 0}
+                    </span>
+                  </button>
+                  {confirming ? (
+                    <button
+                      onClick={() => askDelete(c.id)}
+                      className="flex items-center gap-1 rounded border border-danger/60 bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-danger transition-all active:scale-95"
+                    >
+                      <IconCheck size={11} />
+                      точно?
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => askDelete(c.id)}
+                      aria-label={`Удалить коллекцию ${c.name}`}
+                      className="text-mute opacity-0 transition-all hover:text-danger group-hover:opacity-100"
+                    >
+                      <IconTrash size={13} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
+        )}
+        {creating ? (
+          <div className="mt-1.5 flex gap-2">
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitCreate();
+                if (e.key === "Escape") {
+                  setName("");
+                  setCreating(false);
+                }
+              }}
+              onBlur={() => {
+                if (!name.trim()) setCreating(false);
+              }}
+              placeholder="Название коллекции…"
+              className="min-w-0 flex-1 rounded-md border border-line bg-bg px-2.5 py-1.5 text-xs text-cream placeholder:text-mute outline-none transition-colors focus:border-amber/70"
+            />
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={submitCreate}
+              aria-label="Создать коллекцию"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-amber text-amberink transition-all hover:bg-amberlite active:scale-90"
+            >
+              <IconCheck size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setCreating(true)}
+            className="mt-1.5 flex w-full items-center gap-2 rounded-md border border-dashed border-line px-3 py-2 text-xs text-mute transition-all hover:border-amber/50 hover:text-amber"
+          >
+            <IconPlus size={13} />
+            Новая коллекция
+          </button>
+        )}
+      </section>
+
       {p.tags.length > 0 && (
         <section>
           <Heading>Теги</Heading>
@@ -90,12 +228,12 @@ export function FiltersContent(p: FiltersState) {
                   onClick={() => p.onToggleTag(tag)}
                   className={`rounded border px-2 py-1 text-xs transition-all active:scale-95 ${
                     active
-                      ? "border-amber bg-amber font-semibold text-bg"
+                      ? "border-amber bg-amber font-semibold text-amberink"
                       : "border-line bg-surface/50 text-sand hover:border-amber/50 hover:text-cream"
                   }`}
                 >
                   #{tag}
-                  <span className={`ml-1 ${active ? "text-bg/60" : "text-mute"}`}>{count}</span>
+                  <span className={`ml-1 ${active ? "text-amberink/60" : "text-mute"}`}>{count}</span>
                 </button>
               );
             })}
@@ -118,9 +256,7 @@ export function FiltersContent(p: FiltersState) {
               <IconStar size={19} filled={n <= p.minRating} />
             </button>
           ))}
-          {p.minRating > 0 && (
-            <span className="ml-2 text-xs text-mute">от {p.minRating}</span>
-          )}
+          {p.minRating > 0 && <span className="ml-2 text-xs text-mute">от {p.minRating}</span>}
         </div>
       </section>
 
@@ -173,7 +309,9 @@ export function FiltersContent(p: FiltersState) {
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line/60">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-amber to-amberlite transition-[width] duration-700"
-                style={{ width: `${Math.max(2, Math.min(100, (p.storage.used / p.storage.quota) * 100))}%` }}
+                style={{
+                  width: `${Math.max(2, Math.min(100, (p.storage.used / p.storage.quota) * 100))}%`,
+                }}
               />
             </div>
             <p className="mt-1.5 text-[11px] text-mute">
