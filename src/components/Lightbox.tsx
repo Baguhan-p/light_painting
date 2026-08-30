@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Filters, MediaItem } from "../types";
+import type { Collection, Filters, MediaItem } from "../types";
 import { defaultFilters } from "../types";
 import {
   buildFilter,
@@ -21,6 +21,7 @@ import {
   IconCopy,
   IconDownload,
   IconFilm,
+  IconFolder,
   IconHeart,
   IconImage,
   IconLink,
@@ -43,6 +44,9 @@ interface Props {
   onNext: () => void;
   onPatch: (id: string, p: Partial<MediaItem>) => Promise<void>;
   onRemove: (id: string) => Promise<string>;
+  collections: Collection[];
+  onToggleCollection: (colId: string) => void;
+  onCreateCollection: (name: string) => void;
 }
 
 const SLIDERS: { key: keyof Filters; label: string; min: number; max: number }[] = [
@@ -62,10 +66,24 @@ function SectionTitle({ children, right }: { children: React.ReactNode; right?: 
   );
 }
 
-export default function Lightbox({ item, url, posLabel, total, onClose, onPrev, onNext, onPatch, onRemove }: Props) {
+export default function Lightbox({
+  item,
+  url,
+  posLabel,
+  total,
+  onClose,
+  onPrev,
+  onNext,
+  onPatch,
+  onRemove,
+  collections,
+  onToggleCollection,
+  onCreateCollection,
+}: Props) {
   const { push: toast } = useToast();
   const [nameDraft, setNameDraft] = useState(item.name);
   const [tagDraft, setTagDraft] = useState("");
+  const [colDraft, setColDraft] = useState("");
   const [edits, setEdits] = useState<{ filters: Filters; rotation: number }>({
     filters: { ...item.filters },
     rotation: item.rotation,
@@ -81,6 +99,7 @@ export default function Lightbox({ item, url, posLabel, total, onClose, onPrev, 
   useEffect(() => {
     setNameDraft(item.name);
     setTagDraft("");
+    setColDraft("");
     setEdits({ filters: { ...item.filters }, rotation: item.rotation });
     setSaved(false);
     setCopied(false);
@@ -381,6 +400,65 @@ export default function Lightbox({ item, url, posLabel, total, onClose, onPrev, 
               </div>
             </section>
 
+            {/* Коллекции */}
+            <section>
+              <SectionTitle>Коллекции</SectionTitle>
+              <div className="space-y-1.5">
+                {collections.map((c) => {
+                  const member = (item.collectionIds ?? []).includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => onToggleCollection(c.id)}
+                      className={`flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-left text-sm transition-all active:scale-[.99] ${
+                        member
+                          ? "border-amber/60 bg-amber/10 text-cream"
+                          : "border-line bg-surface/40 text-sand hover:border-amber/40 hover:text-cream"
+                      }`}
+                    >
+                      <span
+                        className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded border transition-colors ${
+                          member ? "border-amber bg-amber text-amberink" : "border-line"
+                        }`}
+                      >
+                        {member && <IconCheck size={11} />}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                      <IconFolder size={14} className={member ? "text-amber" : "text-mute"} />
+                    </button>
+                  );
+                })}
+                {collections.length === 0 && (
+                  <p className="text-xs text-mute">Коллекций пока нет — создайте первую ниже.</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <input
+                    value={colDraft}
+                    onChange={(e) => setColDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && colDraft.trim()) {
+                        onCreateCollection(colDraft);
+                        setColDraft("");
+                      }
+                    }}
+                    placeholder="Новая коллекция…"
+                    className="min-w-0 flex-1 rounded-md border border-line bg-bg px-3 py-1.5 text-xs text-cream placeholder:text-mute outline-none transition-colors focus:border-amber/70"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!colDraft.trim()) return;
+                      onCreateCollection(colDraft);
+                      setColDraft("");
+                    }}
+                    aria-label="Создать коллекцию"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-line text-sand transition-all hover:border-amber/60 hover:text-amber active:scale-90"
+                  >
+                    <IconPlus size={15} />
+                  </button>
+                </div>
+              </div>
+            </section>
+
             {/* Прямая ссылка */}
             <section>
               <SectionTitle>Прямая ссылка</SectionTitle>
@@ -472,7 +550,7 @@ export default function Lightbox({ item, url, posLabel, total, onClose, onPrev, 
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => void downloadItem(edited, url, toast)}
-                  className="col-span-2 flex items-center justify-center gap-2 rounded-md bg-amber px-3 py-2.5 text-sm font-semibold text-bg transition-all hover:bg-amberlite active:scale-[.98]"
+                  className="col-span-2 flex items-center justify-center gap-2 rounded-md bg-amber px-3 py-2.5 text-sm font-semibold text-amberink transition-all hover:bg-amberlite active:scale-[.98]"
                 >
                   <IconDownload size={16} />
                   Скачать{dirty ? " с правками" : ""}

@@ -1,48 +1,72 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MediaItem } from "../types";
-import { dbDelete, dbGetAll, dbPut } from "../lib/db";
-import { buildSeedItems } from "../data/seed";
+import type { Collection, MediaItem } from "../types";
+import {
+  dbDelete,
+  dbDeleteCollection,
+  dbGetAll,
+  dbGetCollections,
+  dbPut,
+  dbPutCollection,
+} from "../lib/db";
+import { buildSeeds } from "../data/seed";
 import { imageDims, uid } from "../lib/utils";
 import { useToast } from "../components/Toast";
 
 export interface MediaStore {
   items: MediaItem[];
+  collections: Collection[];
   ready: boolean;
   importing: boolean;
   urlOf: (item: MediaItem) => string;
   addFiles: (files: FileList | File[]) => Promise<void>;
   patch: (id: string, p: Partial<MediaItem>) => Promise<void>;
   remove: (id: string) => Promise<string>;
+  addCollection: (name: string) => string | undefined;
+  removeCollection: (id: string) => Promise<string>;
 }
 
 export function useMediaStore(): MediaStore {
   const [items, setItems] = useState<MediaItem[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [urls, setUrls] = useState<Map<string, string>>(new Map());
   const [ready, setReady] = useState(false);
   const [importing, setImporting] = useState(false);
   const itemsRef = useRef<MediaItem[]>([]);
+  const collectionsRef = useRef<Collection[]>([]);
   const { push: toast } = useToast();
 
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+  useEffect(() => {
+    collectionsRef.current = collections;
+  }, [collections]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         let list = await dbGetAll();
-        if (list.length === 0) {
-          const seeds = await buildSeedItems();
-          for (const s of seeds) await dbPut(s);
-          list = seeds;
+        let cols: Collection[] = [];
+        try {
+          cols = await dbGetCollections();
+        } catch {
+          cols = [];
+        }
+        if (list.length === 0 && cols.length === 0) {
+          const seeds = await buildSeeds();
+          for (const s of seeds.items) await dbPut(s);
+          for (const c of seeds.collections) await dbPutCollection(c);
+          list = seeds.items;
+          cols = seeds.collections;
         }
         if (!alive) return;
         const m = new Map<string, string>();
         list.forEach((i) => {
           if (i.blob) m.set(i.id, URL.createObjectURL(i.blob));
         });
-        setItems(list);
+        setItems(list.map((i) => ({ ...i, collectionIds: i.collectionIds ?? [] })));
+        setCollections(cols);
         setUrls(m);
         setReady(true);
       } catch (err) {
@@ -96,6 +120,7 @@ export function useMediaStore(): MediaStore {
             blob: f,
             rotation: 0,
             filters: { brightness: 100, contrast: 100, saturate: 100, sepia: 0, grayscale: 0 },
+            collectionIds: [],
           };
           await dbPut(item);
           setItems((prev) => [item, ...prev]);
@@ -118,7 +143,7 @@ export function useMediaStore(): MediaStore {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...p } : i)));
     if (cur) {
       try {
-        await dbPut({ ...cur, ...p });
+        await dbPut({ ...cur, ...p, collectionIds: p.collectionIds ?? cur.collectionIds ?? [] });
       } catch {
         /* noop */
       }
@@ -143,5 +168,61 @@ export function useMediaStore(): MediaStore {
     return cur?.name ?? "Объект";
   }, []);
 
-  return { items, ready, importing, urlOf, addFiles, patch, remove };
+  const addCollection = useCallback(
+    (name: string): string | undefined => {
+      const n = name.trim();
+      if (!n) return undefined;
+      if (collectionsRef.current.some((c) => c.name.toLowerCase() === n.toLowerCase())) {
+        toast("Коллекция с таким именем уже есть", "err");
+        return undefined;
+      }
+      const col: Collection = { id: uid(), name: n, createdAt: Date.now() };
+      setCollections((prev) => [...prev, col]);
+      void dbPutCollection(col).catch(() => undefined);
+      return col.id;
+    },
+    [toast],
+  );
+
+  const removeCollection = useCallback(async (id: string) => {
+    const cur = collectionsRef.current.find((c) => c.id === id);
+    setCollections((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await dbDeleteCollection(id);
+    } catch {
+      /* noop */
+    }
+    // Вычистить коллекцию из всех объектов
+    const affected = itemsRef.current.filter((i) => (i.collectionIds ?? []).includes(id));
+    if (affected.length) {
+      setItems((prev) =>
+        prev.map((i) =>
+          (i.collectionIds ?? []).includes(id)
+            ? { ...i, collectionIds: i.collectionIds.filter((x) => x !== id) }
+            : i,
+        ),
+      );
+      for (const i of affected) {
+        try {
+          await dbPut({ ...i, collectionIds: (i.collectionIds ?? []).filter((x) => x !== id) });
+        } catch {
+          /* noop */
+        }
+      }
+    }
+    return cur?.name ?? "Коллекция";
+  }, []);
+
+  return {
+    items,
+    collections,
+    ready,
+    importing,
+    urlOf,
+    addFiles,
+    patch,
+    remove,
+    addCollection,
+    removeCollection,
+  };
 }

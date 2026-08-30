@@ -1,5 +1,7 @@
 export type MediaType = "photo" | "video";
 
+export type Theme = "dark" | "light";
+
 export interface Filters {
   brightness: number; // 100 = без изменений
   contrast: number;
@@ -26,6 +28,13 @@ export interface MediaItem {
   remoteUrl?: string;
   rotation: 0 | 90 | 180 | 270;
   filters: Filters;
+  collectionIds: string[];
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  createdAt: number;
 }
 
 export const defaultFilters: Filters = {

@@ -41,7 +41,7 @@ export default function MediaCard({ item, url, index, onOpen, onFav, onRate, onD
 
   return (
     <Reveal delay={(index % 8) * 45} className="mb-4 break-inside-avoid">
-      <article className="group relative overflow-hidden rounded-lg border border-line/80 bg-surface transition-all duration-300 hover:-translate-y-1 hover:border-amber/50 hover:shadow-[0_20px_44px_-18px_rgba(0,0,0,.85)]">
+      <article className="group relative overflow-hidden rounded-lg border border-line/80 bg-surface transition-all duration-300 hover:-translate-y-1 hover:border-amber/50 hover:shadow-[0_20px_44px_-18px_var(--shadow-c)]">
         <div className="relative overflow-hidden">
           <button onClick={onOpen} className="block w-full cursor-zoom-in text-left" aria-label={`Открыть ${item.name}`}>
             <div className="overflow-hidden bg-black/30 transition-transform duration-500 group-hover:scale-[1.03]">
@@ -110,7 +110,7 @@ export default function MediaCard({ item, url, index, onOpen, onFav, onRate, onD
                 onClick={onDownload}
                 aria-label="Скачать"
                 title="Скачать"
-                className="grid h-8 w-8 place-items-center rounded-md bg-cream/10 text-cream backdrop-blur-sm transition-all hover:bg-amber hover:text-bg active:scale-90"
+                className="grid h-8 w-8 place-items-center rounded-md bg-cream/10 text-cream backdrop-blur-sm transition-all hover:bg-amber hover:text-amberink active:scale-90"
               >
                 <IconDownload size={15} />
               </button>
@@ -118,7 +118,7 @@ export default function MediaCard({ item, url, index, onOpen, onFav, onRate, onD
                 onClick={onShare}
                 aria-label="Поделиться"
                 title="Поделиться"
-                className="grid h-8 w-8 place-items-center rounded-md bg-cream/10 text-cream backdrop-blur-sm transition-all hover:bg-amber hover:text-bg active:scale-90"
+                className="grid h-8 w-8 place-items-center rounded-md bg-cream/10 text-cream backdrop-blur-sm transition-all hover:bg-amber hover:text-amberink active:scale-90"
               >
                 <IconShare size={15} />
               </button>

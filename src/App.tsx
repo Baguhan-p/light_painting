@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MediaItem } from "./types";
 import { useMediaStore } from "./hooks/useMediaStore";
+import { useTheme } from "./hooks/useTheme";
 import { ToastProvider, useToast } from "./components/Toast";
 import TopBar from "./components/TopBar";
 import type { Density } from "./components/TopBar";
@@ -21,9 +22,11 @@ const COLS: Record<Density, string> = {
 function Shell() {
   const store = useMediaStore();
   const { push: toast } = useToast();
+  const { theme, toggle } = useTheme();
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [minRating, setMinRating] = useState(0);
   const [sort, setSort] = useState<SortKey>("new");
@@ -82,6 +85,7 @@ function Shell() {
       if (typeFilter === "photo" && i.type !== "photo") return false;
       if (typeFilter === "video" && i.type !== "video") return false;
       if (typeFilter === "fav" && !i.favorite) return false;
+      if (activeCollectionId && !(i.collectionIds ?? []).includes(activeCollectionId)) return false;
       if (minRating > 0 && i.rating < minRating) return false;
       if (activeTags.length > 0 && !activeTags.every((t) => i.tags.includes(t))) return false;
       if (q && !(i.name.toLowerCase().includes(q) || i.tags.some((t) => t.includes(q)))) return false;
@@ -99,7 +103,26 @@ function Shell() {
           return b.createdAt - a.createdAt;
       }
     });
-  }, [store.items, query, typeFilter, minRating, activeTags, sort]);
+  }, [store.items, query, typeFilter, activeCollectionId, minRating, activeTags, sort]);
+
+  const collectionCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    store.collections.forEach((c) => m.set(c.id, 0));
+    store.items.forEach((i) =>
+      (i.collectionIds ?? []).forEach((id) => m.set(id, (m.get(id) ?? 0) + 1)),
+    );
+    return m;
+  }, [store.collections, store.items]);
+
+  const createCollection = (name: string) => {
+    const id = store.addCollection(name);
+    if (id) toast(`Коллекция «${name.trim()}» создана`);
+  };
+
+  const deleteCollection = (id: string) => {
+    setActiveCollectionId((cur) => (cur === id ? null : cur));
+    void store.removeCollection(id).then((n) => toast(`Коллекция «${n}» удалена`, "info"));
+  };
 
   const tags = useMemo(() => {
     const m = new Map<string, number>();
@@ -119,19 +142,31 @@ function Shell() {
 
   const totalSize = useMemo(() => store.items.reduce((s, i) => s + i.size, 0), [store.items]);
 
-  const hasFilters = query !== "" || typeFilter !== "all" || activeTags.length > 0 || minRating > 0;
+  const hasFilters =
+    query !== "" ||
+    typeFilter !== "all" ||
+    activeTags.length > 0 ||
+    minRating > 0 ||
+    activeCollectionId !== null;
 
   const resetFilters = () => {
     setQuery("");
     setTypeFilter("all");
     setActiveTags([]);
     setMinRating(0);
+    setActiveCollectionId(null);
   };
 
   const filtersState: FiltersState = {
     counts,
     typeFilter,
     onType: setTypeFilter,
+    collections: store.collections,
+    collectionCounts,
+    activeCollectionId,
+    onCollection: (id) => setActiveCollectionId((prev) => (prev === id ? null : id)),
+    onCreateCollection: createCollection,
+    onDeleteCollection: deleteCollection,
     tags,
     activeTags,
     onToggleTag: (t) =>
@@ -163,6 +198,17 @@ function Shell() {
     void store.patch(i.id, { rating: n === i.rating ? 0 : n });
   const onFav = (i: MediaItem) => () => void store.patch(i.id, { favorite: !i.favorite });
 
+  const toggleItemCollection = (colId: string) => {
+    if (!lightboxItem) return;
+    const ids = lightboxItem.collectionIds ?? [];
+    const has = ids.includes(colId);
+    void store.patch(lightboxItem.id, {
+      collectionIds: has ? ids.filter((x: string) => x !== colId) : [...ids, colId],
+    });
+    const colName = store.collections.find((c) => c.id === colId)?.name ?? "";
+    toast(has ? `Убрано из «${colName}»` : `Добавлено в «${colName}»`, "info");
+  };
+
   return (
     <div className="min-h-screen font-body text-cream">
       <TopBar
@@ -172,6 +218,8 @@ function Shell() {
         importing={store.importing}
         density={density}
         onDensity={setDensity}
+        theme={theme}
+        onToggleTheme={toggle}
       />
 
       <div className="mx-auto flex max-w-[1600px] gap-7 px-4 py-6 sm:px-6">
@@ -232,6 +280,12 @@ function Shell() {
               </div>
               <div>
                 <p className="font-display text-2xl font-bold leading-none text-cream">
+                  {store.collections.length}
+                </p>
+                <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-mute">коллекций</p>
+              </div>
+              <div>
+                <p className="font-display text-2xl font-bold leading-none text-cream">
                   {formatBytes(totalSize)}
                 </p>
                 <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-mute">объём коллекции</p>
@@ -264,7 +318,7 @@ function Shell() {
                 </p>
                 <button
                   onClick={() => uploadRef.current?.click()}
-                  className="mt-6 inline-flex items-center gap-2 rounded-md bg-amber px-5 py-2.5 text-sm font-semibold text-bg transition-all hover:bg-amberlite active:scale-95"
+                  className="mt-6 inline-flex items-center gap-2 rounded-md bg-amber px-5 py-2.5 text-sm font-semibold text-amberink transition-all hover:bg-amberlite active:scale-95"
                 >
                   <IconUpload size={16} />
                   Выбрать файлы
@@ -317,7 +371,8 @@ function Shell() {
               Светопись — тёмная комната для ваших снимков
             </p>
             <p>
-              Данные живут в IndexedDB этого браузера · {counts.all} объектов · {formatBytes(totalSize)}
+              Данные живут в IndexedDB этого браузера · {counts.all} объектов · {formatBytes(totalSize)} ·
+              локальный запуск: <span className="font-semibold text-sand">start.bat</span>
             </p>
           </footer>
         </main>
@@ -336,6 +391,9 @@ function Shell() {
           onNext={() => move(1)}
           onPatch={store.patch}
           onRemove={store.remove}
+          collections={store.collections}
+          onToggleCollection={toggleItemCollection}
+          onCreateCollection={createCollection}
         />
       )}
 
